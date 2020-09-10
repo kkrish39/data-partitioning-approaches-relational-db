@@ -1,5 +1,7 @@
 import psycopg2
+import numpy as np
 from psycopg2 import sql
+import bisect
 import os
 import sys
 
@@ -17,6 +19,10 @@ def selectFromMovieRatingsTable(tableName, cursor):
     cursor.execute("SELECT * from {}".format(tableName))
     return cursor.fetchall()
 
+def selectFromMovieRatingsTableWithRatings(tableName, cursor, lowR, highR):
+    cursor.execute("SELECT * from {} where ratings >= %s and ratings < %s".format(tableName),[lowR, highR])
+    return cursor.fetchall()
+
 def insertIntoMovieRatingsTable(tableName, cursor, userid, itemid, rating):
     cursor.execute(sql.SQL("INSERT INTO {} (userid, movieid, rating) VALUES(%s,%s,%s)").format(sql.Identifier(tableName)), [userid, itemid, rating])
 
@@ -32,8 +38,10 @@ def insertMetaTable(cursor, partitionIdentifier, numPartitions):
 
 def getNumPartition(cursor, partitionIdentifier):
     cursor.execute(sql.SQL("SELECT num_partitions from {} where partition_id=%s").format(sql.Identifier(META_TABLE)), [partitionIdentifier])
-
     return cursor.fetchone()[0]
+
+def splitNumToIntervals(baseNumer, numberOfParts):
+    return np.round(np.linspace(0, baseNumer, numberOfParts+1),2)
 
 def loadRatings(ratingstablename, ratingsfilepath, openconnection):
     # Getting the cursor pointer from the open connection.
@@ -53,25 +61,19 @@ def loadRatings(ratingstablename, ratingsfilepath, openconnection):
 
 def rangePartition(ratingstablename, numberofpartitions, openconnection):
     cursor = openconnection.cursor()
-    numberofpartitions = 6
-    val = round(5/numberofpartitions, 2)
-    start = 0
-    print(round(5/numberofpartitions, 2))
-    interval = []
-    interval.append(start)
 
     createMetaTable(cursor)
     insertMetaTable(cursor, RANGE_TABLE_PREFIX, numberofpartitions)
 
-    for i in range (0, numberofpartitions+1):
-        start = round(start + val, 2)
-        interval.append(5 if start > 5 else  start)
-    
+    interval = splitNumToIntervals(5, numberofpartitions)
+    interval = interval.astype(float)
     for i in range(0, numberofpartitions):
         createMoiveRatingsTable(RANGE_TABLE_PREFIX+str(i), cursor)
     
-    for i in selectFromMovieRatingsTable(ratingstablename, cursor):
-        print(i)
+    for row in selectFromMovieRatingsTable(ratingstablename, cursor):
+        tableIndex = bisect.bisect_left(interval, row[2]) - 1
+        tableIndex = 0 if tableIndex < 0 else tableIndex
+        insertIntoMovieRatingsTable(RANGE_TABLE_PREFIX+str(tableIndex),cursor,row[0],row[1],row[2])
 
 
 def roundRobinPartition(ratingstablename, numberofpartitions, openconnection):
@@ -106,10 +108,12 @@ def rangeInsert(ratingstablename, userid, itemid, rating, openconnection):
     cursor = openconnection.cursor()
     numPartitions = getNumPartition(cursor, RANGE_TABLE_PREFIX)
 
-    partitionArray = []
-    for i in range(0, 5):
+    partitionArray = splitNumToIntervals(5,numPartitions)
+    
+    for i in range(1, numPartitions+1):
         if(rating <= partitionArray[i]):
-            partitionTable = RANGE_TABLE_PREFIX + str(i)
+            partitionTable = RANGE_TABLE_PREFIX + str(i-1)
+            break
 
     insertIntoMovieRatingsTable(ratingstablename,cursor,userid,itemid, rating)
     insertIntoMovieRatingsTable(partitionTable,cursor,userid,itemid, rating)

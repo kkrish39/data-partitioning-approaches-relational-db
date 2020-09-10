@@ -19,8 +19,12 @@ def selectFromMovieRatingsTable(tableName, cursor):
     cursor.execute("SELECT * from {}".format(tableName))
     return cursor.fetchall()
 
-def selectFromMovieRatingsTableWithRatings(tableName, cursor, lowR, highR):
-    cursor.execute("SELECT * from {} where ratings >= %s and ratings < %s".format(tableName),[lowR, highR])
+def selectFromMovieRatingsTableWithinRange(tableName, cursor, lowR, highR):
+    cursor.execute("SELECT * from {} where rating >= %s and rating <= %s".format(tableName),[lowR, highR])
+    return cursor.fetchall()
+
+def selectFromMovieRatingsTableWithPointRating(tableName, cursor, rating):
+    cursor.execute("SELECT * from {} where rating = %s".format(tableName),[rating])
     return cursor.fetchall()
 
 def insertIntoMovieRatingsTable(tableName, cursor, userid, itemid, rating):
@@ -120,12 +124,71 @@ def rangeInsert(ratingstablename, userid, itemid, rating, openconnection):
 
 
 def rangeQuery(ratingMinValue, ratingMaxValue, openconnection, outputPath):
-    pass #Remove this once you are done with implementation
+    cursor = openconnection.cursor()
 
+    # numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
+    # numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
+
+    # partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
+
+    # constructedResult = []
+
+    # for i in range(0, numPartitionsRRobinTable):
+    #     tableName = RROBIN_TABLE_PREFIX+str(i)
+    #     returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
+    #     for r in returnedRows:
+    #             constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+    
+    # ratingMinValue = 3.5
+    # ratingMaxValue = 4.5
+    # print(ratingMinValue, ratingMaxValue)
+    # for i in range(0, numPartitionRangeTable):
+    #     if  partitionArrayRangeTable[i] <= ratingMinValue and partitionArrayRangeTable[i+1] >= ratingMinValue: 
+    #         tableName = RANGE_TABLE_PREFIX+str(i)
+    #         print("----------------",partitionArrayRangeTable[i])
+    #         i = i + 1
+    #         while partitionArrayRangeTable[i] >= ratingMaxValue and partitionArrayRangeTable[i+1] <= ratingMaxValue and i < numPartitionRangeTable:
+    #             tableName = RANGE_TABLE_PREFIX+str(i)
+    #             print("----------------",tableName)
+    #             i = i+1
+    #         break
+    #             # returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, partitionArrayRangeTable[i], partitionArrayRangeTable[i+1])
+    #             # for r in returnedRows:
+    #             #     constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+
+    # writeRowsToFile(outputPath, constructedResult)
 
 def pointQuery(ratingValue, openconnection, outputPath):
-    pass # Remove this once you are done with implementation
+    cursor = openconnection.cursor()
+    
+    numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
+    numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
 
+    partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
+
+    constructedResult = []
+    for i in range(1, numPartitionRangeTable+1):
+        if ratingValue <= partitionArrayRangeTable[i]:
+            tableName = RANGE_TABLE_PREFIX+str(i-1)
+            returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
+            for r in returnedRows:
+                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+            break
+    
+    
+    for i in range(0, numPartitionsRRobinTable):
+        tableName = RROBIN_TABLE_PREFIX+str(i)
+        returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
+        for r in returnedRows:
+                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+    
+    writeRowsToFile(outputPath, constructedResult)
+    
+
+def writeRowsToFile(fileName, constructedResult):
+    with open(fileName, "w") as file:
+        for line in constructedResult:
+            file.writelines(line + "\n")
 
 def createDB(dbname='dds_assignment1'):
     """

@@ -126,47 +126,52 @@ def rangeInsert(ratingstablename, userid, itemid, rating, openconnection):
 def rangeQuery(ratingMinValue, ratingMaxValue, openconnection, outputPath):
     cursor = openconnection.cursor()
 
-    # numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
-    # numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
-
-    # partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
-
-    # constructedResult = []
-
-    # for i in range(0, numPartitionsRRobinTable):
-    #     tableName = RROBIN_TABLE_PREFIX+str(i)
-    #     returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
-    #     for r in returnedRows:
-    #             constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-    
-    # ratingMinValue = 3.5
-    # ratingMaxValue = 4.5
-    # print(ratingMinValue, ratingMaxValue)
-    # for i in range(0, numPartitionRangeTable):
-    #     if  partitionArrayRangeTable[i] <= ratingMinValue and partitionArrayRangeTable[i+1] >= ratingMinValue: 
-    #         tableName = RANGE_TABLE_PREFIX+str(i)
-    #         print("----------------",partitionArrayRangeTable[i])
-    #         i = i + 1
-    #         while partitionArrayRangeTable[i] >= ratingMaxValue and partitionArrayRangeTable[i+1] <= ratingMaxValue and i < numPartitionRangeTable:
-    #             tableName = RANGE_TABLE_PREFIX+str(i)
-    #             print("----------------",tableName)
-    #             i = i+1
-    #         break
-    #             # returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, partitionArrayRangeTable[i], partitionArrayRangeTable[i+1])
-    #             # for r in returnedRows:
-    #             #     constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-
-    # writeRowsToFile(outputPath, constructedResult)
-
-def pointQuery(ratingValue, openconnection, outputPath):
-    cursor = openconnection.cursor()
-    
     numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
     numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
 
     partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
 
     constructedResult = []
+    ratingMaxValue = 5
+    ratingMinValue = 0
+    for i in range(0, numPartitionsRRobinTable):
+        tableName = RROBIN_TABLE_PREFIX+str(i)
+        returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
+        for r in returnedRows:
+                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+    
+    for i in range(0, numPartitionRangeTable):
+        if  partitionArrayRangeTable[i] <= ratingMinValue and partitionArrayRangeTable[i+1] >= ratingMinValue: 
+            tableName = RANGE_TABLE_PREFIX+str(i)
+            returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
+            for r in returnedRows:
+                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+            i = i + 1
+            while partitionArrayRangeTable[i] <= ratingMaxValue and i < numPartitionRangeTable:
+                tableName = RANGE_TABLE_PREFIX+str(i)
+                returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
+                for r in returnedRows:
+                    constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+                i = i+1
+            break
+
+    writeRowsToFile(outputPath, constructedResult)
+
+def pointQuery(ratingValue, openconnection, outputPath):
+    cursor = openconnection.cursor()
+    numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
+    numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
+
+    partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
+
+    constructedResult = []
+    
+    for i in range(0, numPartitionsRRobinTable):
+        tableName = RROBIN_TABLE_PREFIX+str(i)
+        returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
+        for r in returnedRows:
+                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+    
     for i in range(1, numPartitionRangeTable+1):
         if ratingValue <= partitionArrayRangeTable[i]:
             tableName = RANGE_TABLE_PREFIX+str(i-1)
@@ -174,13 +179,6 @@ def pointQuery(ratingValue, openconnection, outputPath):
             for r in returnedRows:
                 constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
             break
-    
-    
-    for i in range(0, numPartitionsRRobinTable):
-        tableName = RROBIN_TABLE_PREFIX+str(i)
-        returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
-        for r in returnedRows:
-                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
     
     writeRowsToFile(outputPath, constructedResult)
     

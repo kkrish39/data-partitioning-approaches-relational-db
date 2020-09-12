@@ -48,141 +48,233 @@ def splitNumToIntervals(baseNumer, numberOfParts):
     return np.round(np.linspace(0, baseNumer, numberOfParts+1),2)
 
 def loadRatings(ratingstablename, ratingsfilepath, openconnection):
-    # Getting the cursor pointer from the open connection.
-    cursor = openconnection.cursor()
+    try:
+        # Getting the cursor pointer from the open connection.
+        cursor = openconnection.cursor()
 
-    # Create table for the given ratingstablename
-    createMoiveRatingsTable(ratingstablename, cursor)
+        # Create table for the given ratingstablename
+        createMoiveRatingsTable(ratingstablename, cursor)
 
-    # read file data from the given path
-    fileData = open(ratingsfilepath)
-    for line in fileData:
-        # split each line of the file having :: separator
-        rowToBeInserted = line.split("::")
-        # Insert userid, movieid, rating to the table
-        insertIntoMovieRatingsTable(ratingstablename, cursor, rowToBeInserted[0], rowToBeInserted[1], rowToBeInserted[2])
+        # read file data from the given path
+        fileData = open(ratingsfilepath)
+        for line in fileData:
+            # split each line of the file having :: separator
+            rowToBeInserted = line.split("::")
+            # Insert userid, movieid, rating to the table
+            insertIntoMovieRatingsTable(ratingstablename, cursor, rowToBeInserted[0], rowToBeInserted[1], rowToBeInserted[2])
+        openconnection.commit()
+    except psycopg2.DatabaseError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    except IOError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    finally:
+        if cursor:
+            cursor.close()
 
 
 def rangePartition(ratingstablename, numberofpartitions, openconnection):
-    cursor = openconnection.cursor()
+    try:
+        cursor = openconnection.cursor()
 
-    createMetaTable(cursor)
-    insertMetaTable(cursor, RANGE_TABLE_PREFIX, numberofpartitions)
+        createMetaTable(cursor)
+        insertMetaTable(cursor, RANGE_TABLE_PREFIX, numberofpartitions)
 
-    interval = splitNumToIntervals(5, numberofpartitions)
-    interval = interval.astype(float)
-    for i in range(0, numberofpartitions):
-        createMoiveRatingsTable(RANGE_TABLE_PREFIX+str(i), cursor)
-    
-    for row in selectFromMovieRatingsTable(ratingstablename, cursor):
-        tableIndex = bisect.bisect_left(interval, row[2]) - 1
-        tableIndex = 0 if tableIndex < 0 else tableIndex
-        insertIntoMovieRatingsTable(RANGE_TABLE_PREFIX+str(tableIndex),cursor,row[0],row[1],row[2])
+        interval = splitNumToIntervals(5, numberofpartitions)
+        interval = interval.astype(float)
+        for i in range(0, numberofpartitions):
+            createMoiveRatingsTable(RANGE_TABLE_PREFIX+str(i), cursor)
+        
+        for row in selectFromMovieRatingsTable(ratingstablename, cursor):
+            tableIndex = bisect.bisect_left(interval, row[2]) - 1
+            tableIndex = 0 if tableIndex < 0 else tableIndex
+            insertIntoMovieRatingsTable(RANGE_TABLE_PREFIX+str(tableIndex),cursor,row[0],row[1],row[2])
+        openconnection.commit()
+    except psycopg2.DatabaseError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    except IOError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    finally:
+        if cursor:
+            cursor.close()
 
 
 def roundRobinPartition(ratingstablename, numberofpartitions, openconnection):
-    cursor = openconnection.cursor()
-    
-    createMetaTable(cursor)
-    insertMetaTable(cursor, RROBIN_TABLE_PREFIX, numberofpartitions)
+    try:
+        cursor = openconnection.cursor()
+        
+        createMetaTable(cursor)
+        insertMetaTable(cursor, RROBIN_TABLE_PREFIX, numberofpartitions)
 
-    for i in range(0, numberofpartitions):
-        createMoiveRatingsTable(RROBIN_TABLE_PREFIX+str(i), cursor)
+        for i in range(0, numberofpartitions):
+            createMoiveRatingsTable(RROBIN_TABLE_PREFIX+str(i), cursor)
 
-    rows  = selectFromMovieRatingsTable(ratingstablename, cursor)
+        rows  = selectFromMovieRatingsTable(ratingstablename, cursor)
 
-    for i in range(0, len(rows)):
-        tableName = RROBIN_TABLE_PREFIX+str(i%numberofpartitions)
-        insertIntoMovieRatingsTable(tableName, cursor, rows[i][0], rows[i][1], rows[i][2])
+        for i in range(0, len(rows)):
+            tableName = RROBIN_TABLE_PREFIX+str(i%numberofpartitions)
+            insertIntoMovieRatingsTable(tableName, cursor, rows[i][0], rows[i][1], rows[i][2])
+        openconnection.commit()
+    except psycopg2.DatabaseError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    except IOError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    finally:
+        if cursor:
+            cursor.close()
 
 
 def roundRobinInsert(ratingstablename, userid, itemid, rating, openconnection):
-    cursor = openconnection.cursor()
-    
-    count = rowCountOfMovieRatingsTable(ratingstablename, cursor)
-    numPartitions = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
-    
-    partitionTable = RROBIN_TABLE_PREFIX + str(count % int(numPartitions))
+    try:
+        cursor = openconnection.cursor()
+        
+        count = rowCountOfMovieRatingsTable(ratingstablename, cursor)
+        numPartitions = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
+        
+        partitionTable = RROBIN_TABLE_PREFIX + str(count % int(numPartitions))
 
-    insertIntoMovieRatingsTable(ratingstablename, cursor, userid, itemid,rating)
-    insertIntoMovieRatingsTable(partitionTable,cursor,userid,itemid, rating)
+        insertIntoMovieRatingsTable(ratingstablename, cursor, userid, itemid,rating)
+        insertIntoMovieRatingsTable(partitionTable,cursor,userid,itemid, rating)
+        openconnection.commit()
+    except psycopg2.DatabaseError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    except IOError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    finally:
+        if cursor:
+            cursor.close()
 
 
 def rangeInsert(ratingstablename, userid, itemid, rating, openconnection):
-    cursor = openconnection.cursor()
-    numPartitions = getNumPartition(cursor, RANGE_TABLE_PREFIX)
+    try:
+        cursor = openconnection.cursor()
+        numPartitions = getNumPartition(cursor, RANGE_TABLE_PREFIX)
 
-    partitionArray = splitNumToIntervals(5,numPartitions)
-    
-    for i in range(1, numPartitions+1):
-        if(rating <= partitionArray[i]):
-            partitionTable = RANGE_TABLE_PREFIX + str(i-1)
-            break
+        partitionArray = splitNumToIntervals(5,numPartitions)
+        
+        for i in range(1, numPartitions+1):
+            if(rating <= partitionArray[i]):
+                partitionTable = RANGE_TABLE_PREFIX + str(i-1)
+                break
 
-    insertIntoMovieRatingsTable(ratingstablename,cursor,userid,itemid, rating)
-    insertIntoMovieRatingsTable(partitionTable,cursor,userid,itemid, rating)
+        insertIntoMovieRatingsTable(ratingstablename,cursor,userid,itemid, rating)
+        insertIntoMovieRatingsTable(partitionTable,cursor,userid,itemid, rating)
+        openconnection.commit()
+    except psycopg2.DatabaseError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    except IOError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    finally:
+        if cursor:
+            cursor.close()
 
 
 def rangeQuery(ratingMinValue, ratingMaxValue, openconnection, outputPath):
-    cursor = openconnection.cursor()
+    try:
+        ratingMaxValue = 0
+        ratingMinValue = 4
+        cursor = openconnection.cursor()
+        if(ratingMinValue < ratingMaxValue):
+            numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
+            numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
 
-    numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
-    numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
+            partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
 
-    partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
-
-    constructedResult = []
-    ratingMaxValue = 5
-    ratingMinValue = 0
-    for i in range(0, numPartitionsRRobinTable):
-        tableName = RROBIN_TABLE_PREFIX+str(i)
-        returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
-        for r in returnedRows:
-                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-    
-    for i in range(0, numPartitionRangeTable):
-        if  partitionArrayRangeTable[i] <= ratingMinValue and partitionArrayRangeTable[i+1] >= ratingMinValue: 
-            tableName = RANGE_TABLE_PREFIX+str(i)
-            returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
-            for r in returnedRows:
-                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-            i = i + 1
-            while partitionArrayRangeTable[i] <= ratingMaxValue and i < numPartitionRangeTable:
-                tableName = RANGE_TABLE_PREFIX+str(i)
+            constructedResult = []
+            for i in range(0, numPartitionsRRobinTable):
+                tableName = RROBIN_TABLE_PREFIX+str(i)
                 returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
                 for r in returnedRows:
-                    constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-                i = i+1
-            break
+                        constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+            
+            for i in range(0, numPartitionRangeTable):
+                if  partitionArrayRangeTable[i] <= ratingMinValue and partitionArrayRangeTable[i+1] >= ratingMinValue: 
+                    tableName = RANGE_TABLE_PREFIX+str(i)
+                    returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
+                    for r in returnedRows:
+                        constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+                    i = i + 1
+                    while partitionArrayRangeTable[i] <= ratingMaxValue and i < numPartitionRangeTable:
+                        tableName = RANGE_TABLE_PREFIX+str(i)
+                        returnedRows = selectFromMovieRatingsTableWithinRange(tableName, cursor, ratingMinValue, ratingMaxValue)
+                        for r in returnedRows:
+                            constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+                        i = i+1
+                    break
 
-    writeRowsToFile(outputPath, constructedResult)
+            writeRowsToFile(outputPath, constructedResult)
+            openconnection.commit()
+        elif ratingMinValue == ratingMaxValue:
+            pointQuery(ratingMaxValue,openconnection,outputPath)
+    except psycopg2.DatabaseError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    except IOError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    finally:
+        if cursor:
+            cursor.close()
 
 def pointQuery(ratingValue, openconnection, outputPath):
-    cursor = openconnection.cursor()
-    numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
-    numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
+    try:
+        cursor = openconnection.cursor()
+        numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
+        numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
 
-    partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
+        partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
 
-    constructedResult = []
-    
-    for i in range(0, numPartitionsRRobinTable):
-        tableName = RROBIN_TABLE_PREFIX+str(i)
-        returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
-        for r in returnedRows:
-                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-    
-    for i in range(1, numPartitionRangeTable+1):
-        if ratingValue <= partitionArrayRangeTable[i]:
-            tableName = RANGE_TABLE_PREFIX+str(i-1)
+        constructedResult = []
+        
+        for i in range(0, numPartitionsRRobinTable):
+            tableName = RROBIN_TABLE_PREFIX+str(i)
             returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
             for r in returnedRows:
-                constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-            break
+                    constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+        
+        for i in range(1, numPartitionRangeTable+1):
+            if ratingValue <= partitionArrayRangeTable[i]:
+                tableName = RANGE_TABLE_PREFIX+str(i-1)
+                returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
+                for r in returnedRows:
+                    constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+                break
+        
+        writeRowsToFile(outputPath, constructedResult)
+        openconnection.commit()
+    except psycopg2.DatabaseError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    except IOError as e:
+        if openconnection:
+            openconnection.rollback()
+        print('Error %s' % e)
+    finally:
+        if cursor:
+            cursor.close()
     
-    writeRowsToFile(outputPath, constructedResult)
-    
-
 def writeRowsToFile(fileName, constructedResult):
     with open(fileName, "w") as file:
         for line in constructedResult:

@@ -213,8 +213,9 @@ def rangeInsert(ratingstablename, userid, itemid, rating, openconnection):
         partitionTable = RANGE_TABLE_PREFIX + str(tableIndex)
 
         # Insert into both the mail table and the appropriate round robin partition table
-        insertIntoMovieRatingsTable(ratingstablename,cursor,userid,itemid, rating)
-        insertIntoMovieRatingsTable(partitionTable,cursor,userid,itemid, rating)
+        insertIntoMovieRatingsTable(ratingstablename, cursor, userid, itemid, rating)
+        insertIntoMovieRatingsTable(partitionTable, cursor, userid, itemid, rating)
+        
         openconnection.commit()
     except psycopg2.DatabaseError as e:
         if openconnection:

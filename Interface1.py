@@ -73,10 +73,14 @@ def findTableIndex(interval, ratingVal):
 
 # Function to write the returned rows to the given fileName    
 def writeRowsToFile(fileName, constructedResult):
-    content = "\n".join(constructedResult)
 
-    with open(fileName, "w") as file:
-        file.write(content)
+    if(len(constructedResult) > 0):
+        content = "\n".join(constructedResult)
+
+        with open(fileName, "w") as file:
+            file.write(content)
+    else:
+        print("No rows returned. Not creating a file")
 
 def loadRatings(ratingstablename, ratingsfilepath, openconnection):
     try:

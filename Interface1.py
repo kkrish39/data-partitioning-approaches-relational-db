@@ -63,6 +63,9 @@ def splitNumToIntervals(baseNumer, numberOfParts):
 
 # Function to find at which index the given ratingValue exists
 def findTableIndex(interval, ratingVal):
+    if(ratingVal > 5):
+        return (len(interval)-2)
+
     for i in range(0, len(interval)-1):
         if((ratingVal > interval[i]) and ratingVal <= interval[i+1]):
             return i
@@ -231,8 +234,8 @@ def rangeInsert(ratingstablename, userid, itemid, rating, openconnection):
 def rangeQuery(ratingMinValue, ratingMaxValue, openconnection, outputPath):
     try:
         cursor = openconnection.cursor()
-        # Check for the base condition (Min < Max)
-        if(ratingMinValue < ratingMaxValue):
+        # Check for the base condition (Min < Max) and atleast one of the boundaries must be within 0-5
+        if(ratingMinValue < ratingMaxValue and ratingMinValue <=5 and ratingMaxValue>=0):
             numPartitionRangeTable = getNumPartition(cursor, RANGE_TABLE_PREFIX)
             numPartitionsRRobinTable = getNumPartition(cursor, RROBIN_TABLE_PREFIX)
 
@@ -286,27 +289,30 @@ def pointQuery(ratingValue, openconnection, outputPath):
         partitionArrayRangeTable = splitNumToIntervals(5,numPartitionRangeTable)
         constructedResult = []
 
+        if(ratingValue >=0 and ratingValue <=5):
         # Find the list of rows from Round Robin Partitions
-        for i in range(0, numPartitionsRRobinTable):
-            tableName = RROBIN_TABLE_PREFIX+str(i)
+            for i in range(0, numPartitionsRRobinTable):
+                tableName = RROBIN_TABLE_PREFIX+str(i)
+                returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
+                for r in returnedRows:
+                    constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
+            
+            # Find the partition to be queried based on the rating
+            tableIndex = findTableIndex(partitionArrayRangeTable, ratingValue)
+
+            tableName = RANGE_TABLE_PREFIX+str(tableIndex)
             returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
+
+            # Find the list of rows from Range Partition
             for r in returnedRows:
                 constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-        
-        # Find the partition to be queried based on the rating
-        tableIndex = findTableIndex(partitionArrayRangeTable, ratingValue)
-
-        tableName = RANGE_TABLE_PREFIX+str(tableIndex)
-        returnedRows = selectFromMovieRatingsTableWithPointRating(tableName, cursor, ratingValue)
-
-        # Find the list of rows from Range Partition
-        for r in returnedRows:
-            constructedResult.append(tableName+","+str(r[0])+","+str(r[1])+","+str(r[2]))
-        
-        # Write to file the constructed rows
-        writeRowsToFile(outputPath, constructedResult)
-        
-        openconnection.commit()
+            
+            # Write to file the constructed rows
+            writeRowsToFile(outputPath, constructedResult)
+            
+            openconnection.commit()
+        else:
+            print("Invalid Query Value")
     except psycopg2.DatabaseError as e:
         if openconnection:
             openconnection.rollback()

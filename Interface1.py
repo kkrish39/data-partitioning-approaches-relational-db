@@ -183,7 +183,7 @@ def roundRobinInsert(ratingstablename, userid, itemid, rating, openconnection):
         # Find the next row index and construct the table name based on it
         partitionTable = RROBIN_TABLE_PREFIX + str(count % int(numPartitions))
 
-        # Insert into both the mail table and the appropriate round robin partition table
+        # Insert into both the main table and the appropriate round robin partition table
         insertIntoMovieRatingsTable(ratingstablename, cursor, userid, itemid,rating)
         insertIntoMovieRatingsTable(partitionTable,cursor,userid,itemid, rating)
 
@@ -208,10 +208,10 @@ def rangeInsert(ratingstablename, userid, itemid, rating, openconnection):
         interval = splitNumToIntervals(5,numPartitions)
         tableIndex = findTableIndex(interval, rating)
         
-        # Find the next row index and construct the table name based on it
+        # Find the interval index and construct the table name based on it
         partitionTable = RANGE_TABLE_PREFIX + str(tableIndex)
 
-        # Insert into both the mail table and the appropriate round robin partition table
+        # Insert into both the main table and the appropriate range partition table
         insertIntoMovieRatingsTable(ratingstablename, cursor, userid, itemid, rating)
         insertIntoMovieRatingsTable(partitionTable, cursor, userid, itemid, rating)
 
@@ -305,6 +305,7 @@ def pointQuery(ratingValue, openconnection, outputPath):
         
         # Write to file the constructed rows
         writeRowsToFile(outputPath, constructedResult)
+        
         openconnection.commit()
     except psycopg2.DatabaseError as e:
         if openconnection:

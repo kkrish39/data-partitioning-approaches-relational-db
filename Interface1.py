@@ -5,7 +5,6 @@ import sys
 
 RANGE_TABLE_PREFIX = 'range_ratings_part'
 RROBIN_TABLE_PREFIX = 'round_robin_ratings_part'
-META_TABLE = 'fragment_meta'
 
 def getOpenConnection(user='postgres', password='1234', dbname='postgres'):
     return psycopg2.connect("dbname='" + dbname + "' user='" + user + "' host='localhost' password='" + password + "'")
@@ -40,15 +39,15 @@ def rowCountOfMovieRatingsTable(tableName, cursor):
 
 # Function to create a meta data table with given name
 def createMetaTable(cursor):
-    cursor.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {} (partition_id varchar(50) PRIMARY KEY, num_partitions int)").format(sql.Identifier(META_TABLE)))
+    cursor.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {} (partition_id varchar(50) PRIMARY KEY, num_partitions int)").format(sql.Identifier("fragment_meta")))
 
 # Function to insert the row into the meta data table
 def insertMetaTable(cursor, partitionIdentifier, numPartitions):
-    cursor.execute(sql.SQL("INSERT INTO {} (partition_id, num_partitions) VALUES(%s, %s)").format(sql.Identifier(META_TABLE)), [partitionIdentifier, numPartitions])
+    cursor.execute(sql.SQL("INSERT INTO {} (partition_id, num_partitions) VALUES(%s, %s)").format(sql.Identifier("fragment_meta")), [partitionIdentifier, numPartitions])
 
 # Function to retrive the partition information from the meta data table
 def getNumPartition(cursor, partitionIdentifier):
-    cursor.execute(sql.SQL("SELECT num_partitions from {} where partition_id=%s").format(sql.Identifier(META_TABLE)), [partitionIdentifier])
+    cursor.execute(sql.SQL("SELECT num_partitions from {} where partition_id=%s").format(sql.Identifier("fragment_meta")), [partitionIdentifier])
     return cursor.fetchone()[0]
 
 # Function the split the given number into #numberofParts equal parts
@@ -215,7 +214,7 @@ def rangeInsert(ratingstablename, userid, itemid, rating, openconnection):
         # Insert into both the mail table and the appropriate round robin partition table
         insertIntoMovieRatingsTable(ratingstablename, cursor, userid, itemid, rating)
         insertIntoMovieRatingsTable(partitionTable, cursor, userid, itemid, rating)
-        
+
         openconnection.commit()
     except psycopg2.DatabaseError as e:
         if openconnection:

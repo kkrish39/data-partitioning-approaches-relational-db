@@ -12,6 +12,8 @@ def getOpenConnection(user='postgres', password='1234', dbname='postgres'):
 # Function to creat Movie Ratings table with given name
 def createMoiveRatingsTable(tableName, cursor):
     cursor.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {} (userid int, movieid int, rating float)").format(sql.Identifier(tableName)))
+    # Truncate Table if there is a call for second partition having old tables in the database
+    cursor.execute(sql.SQL("TRUNCATE TABLE {}").format(sql.Identifier(tableName)))
 
 # Function to select and return from a given table name
 def selectFromMovieRatingsTable(tableName, cursor):
@@ -43,7 +45,7 @@ def createMetaTable(cursor):
 
 # Function to insert the row into the meta data table
 def insertMetaTable(cursor, partitionIdentifier, numPartitions):
-    cursor.execute(sql.SQL("INSERT INTO {} (partition_id, num_partitions) VALUES(%s, %s)").format(sql.Identifier("fragment_meta")), [partitionIdentifier, numPartitions])
+    cursor.execute(sql.SQL("INSERT INTO {} (partition_id, num_partitions) VALUES(%s, %s) ON CONFLICT (partition_id) DO UPDATE SET num_partitions = %s WHERE {}.partition_id = %s").format(sql.Identifier("fragment_meta"), sql.Identifier("fragment_meta")), [partitionIdentifier, numPartitions, numPartitions, partitionIdentifier])
 
 # Function to retrive the partition information from the meta data table
 def getNumPartition(cursor, partitionIdentifier):
